@@ -10,10 +10,10 @@ import platform
 
 def get_system_info():
     info = []
-    info.append(f"OS: {platform.system()} {platform.release()}")
-    info.append(f"OS Version: {platform.version()}")
-    info.append(f"Architecture: {platform.machine()}")
-    info.append(f"Processor: {platform.processor()}")
+   # info.append(f"OS: {platform.system()} {platform.release()}")
+   # info.append(f"OS Version: {platform.version()}")
+  #  info.append(f"Architecture: {platform.machine()}")
+    #info.append(f"Processor: {platform.processor()}")
 #    info.append(f"CPU Cores: {psutil.cpu_count(logical=False)} physical, {psutil.cpu_count()} logical")
  #   info.append(f"Total RAM: {round(psutil.virtual_memory().total / (1024**3), 2)} GB")
 #    info.append(f"Available RAM: {round(psutil.virtual_memory().available / (1024**3), 2)} GB")
